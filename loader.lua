@@ -1,522 +1,419 @@
--- // Services
+-- Pastikan ini dijalankan sebagai LocalScript via executor
+
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local StarterGui = game:GetService("StarterGui")
+local DataStoreService = game:GetService("DataStoreService")
+local ws = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
+local playerGui = player:WaitForChild("PlayerGui")
 
--- // Local Player
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
-local RootPart = Character:WaitForChild("HumanoidRootPart")
+-- --- Buat GUI kecil dan draggable ---
+local gui = Instance.new("ScreenGui")
+gui.Name = "AutoWaypointGUI"
+gui.Parent = playerGui
 
--- // GUI Setup
-local MainGui = Instance.new("ScreenGui")
-MainGui.Name = "WaypointGUI"
-MainGui.ResetOnSpawn = false
-MainGui.Parent = StarterGui
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 220, 0, 280)
+frame.Position = UDim2.new(0.5, -110, 0.5, -140)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.BorderSizePixel = 2
+frame.Name = "MainFrame"
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 200, 0, 300)
-MainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-MainFrame.BorderSizePixel = 0
-MainFrame.Parent = MainGui
-MainFrame.Draggable = true
+local minimizeBtn = Instance.new("TextButton", frame)
+minimizeBtn.Size = UDim2.new(0, 30, 0, 20)
+minimizeBtn.Position = UDim2.new(1, -60, 0, 0)
+minimizeBtn.Text = "_"
 
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Size = UDim2.new(0, 20, 0, 20)
-MinimizeButton.Position = UDim2.new(0.9, 0, 0, 0)
-MinimizeButton.Text = "-"
-MinimizeButton.TextColor3 = Color3.new(1, 1, 1)
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-MinimizeButton.BorderSizePixel = 0
-MinimizeButton.Parent = MainFrame
-MinimizeButton.MouseButton1Click:Connect(function()
-    MainFrame.Size = UDim2.new(0, 200, 0, 20)
-end)
+local closeBtn = Instance.new("TextButton", frame)
+closeBtn.Size = UDim2.new(0, 30, 0, 20)
+closeBtn.Position = UDim2.new(1, -30, 0, 0)
+closeBtn.Text = "X"
 
-local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.new(0, 20, 0, 20)
-CloseButton.Position = UDim2.new(0.8, 0, 0, 0)
-CloseButton.Text = "X"
-CloseButton.TextColor3 = Color3.new(1, 1, 1)
-CloseButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-CloseButton.BorderSizePixel = 0
-CloseButton.Parent = MainFrame
-CloseButton.MouseButton1Click:Connect(function()
-    MainGui:Destroy()
-end)
+local contentFrame = Instance.new("Frame", frame)
+contentFrame.Size = UDim2.new(1, 0, 1, -20)
+contentFrame.Position = UDim2.new(0, 0, 0, 20)
+contentFrame.BackgroundTransparency = 1
 
-local Tabs = Instance.new("Frame")
-Tabs.Size = UDim2.new(1, 0, 0, 30)
-Tabs.Position = UDim2.new(0, 0, 0, 20)
-Tabs.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-Tabs.BorderSizePixel = 0
-Tabs.Parent = MainFrame
+local waypointList = Instance.new("ScrollingFrame", contentFrame)
+waypointList.Size = UDim2.new(1, 0, 1, 0)
+waypointList.Position = UDim2.new(0, 0, 0, 0)
+waypointList.CanvasSize = UDim2.new(0, 0, 0, 0)
+waypointList.ScrollBarThickness = 6
 
-local WaypointTabButton = Instance.new("TextButton")
-WaypointTabButton.Size = UDim2.new(0.5, 0, 1, 0)
-WaypointTabButton.Position = UDim2.new(0, 0, 0, 0)
-WaypointTabButton.Text = "Waypoint"
-WaypointTabButton.TextColor3 = Color3.new(1, 1, 1)
-WaypointTabButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-WaypointTabButton.BorderSizePixel = 0
-WaypointTabButton.Parent = Tabs
+local waypointButtons = {}
+local waypointNames = {}
+local waypointPos = {} -- menyimpan posisi waypoint
 
-local MiscTabButton = Instance.new("TextButton")
-MiscTabButton.Size = UDim2.new(0.5, 0, 1, 0)
-MiscTabButton.Position = UDim2.new(0.5, 0, 0, 0)
-MiscTabButton.Text = "Misc"
-MiscTabButton.TextColor3 = Color3.new(1, 1, 1)
-MiscTabButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-MiscTabButton.BorderSizePixel = 0
-MiscTabButton.Parent = Tabs
-
-local WaypointFrame = Instance.new("Frame")
-WaypointFrame.Size = UDim2.new(1, 0, 0.8, 0)
-WaypointFrame.Position = UDim2.new(0, 0, 0, 50)
-WaypointFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-WaypointFrame.BorderSizePixel = 0
-WaypointFrame.Parent = MainFrame
-WaypointFrame.Visible = true
-
-local MiscFrame = Instance.new("Frame")
-MiscFrame.Size = UDim2.new(1, 0, 0.8, 0)
-MiscFrame.Position = UDim2.new(0, 0, 0, 50)
-MiscFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-MiscFrame.BorderSizePixel = 0
-MiscFrame.Parent = MainFrame
-MiscFrame.Visible = false
-
-WaypointTabButton.MouseButton1Click:Connect(function()
-    WaypointFrame.Visible = true
-    MiscFrame.Visible = false
-    WaypointTabButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-    MiscTabButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    MainFrame.Size = UDim2.new(0, 200, 0, 300)
-end)
-
-MiscTabButton.MouseButton1Click:Connect(function()
-    WaypointFrame.Visible = false
-    MiscFrame.Visible = true
-    MiscTabButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-    WaypointTabButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    MainFrame.Size = UDim2.new(0, 200, 0, 300)
-end)
-
--- // Waypoint Variables
-local waypoints = {}
-local currentGameId = game.PlaceId
-local saveKey = "Waypoints_" .. currentGameId
-local selectedWaypoint = nil
-local looping = false
-
--- // Waypoint Functions
-local function saveWaypoints()
-    local data = {}
-    for name, pos in pairs(waypoints) do
-        data[name] = {pos.X, pos.Y, pos.Z}
-    end
-    local success, err = pcall(function()
-        StarterGui:SetCore("LocalStorage", {
-            [saveKey] = data
-        })
-    end)
-    if not success then
-        warn("Failed to save waypoints: " .. err)
-    end
+local function createWaypointButton(name)
+    local btn = Instance.new("TextButton", waypointList)
+    btn.Size = UDim2.new(1, -10, 0, 30)
+    btn.Position = UDim2.new(0, 5, 0, (#waypointButtons)*35)
+    btn.Text = name
+    btn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+    table.insert(waypointButtons, btn)
+    waypointList.CanvasSize = UDim2.new(0, 0, 0, (#waypointButtons)*35)
+    return btn
 end
 
+-- Load waypoints dari server (gunakan DataStore jika perlu, di sini kita pakai local)
 local function loadWaypoints()
-    local data = StarterGui:GetCore("LocalStorage")[saveKey]
-    if data then
-        for name, posData in pairs(data) do
-            if type(posData) == "table" and #posData == 3 then
-                local pos = Vector3.new(posData[1], posData[2], posData[3])
-                waypoints[name] = pos
-                updateWaypointList()
-            end
+    -- Kalau mau pakai DataStore, bisa diaktifkan di sini
+    -- tapi untuk executor biasanya pakai variabel lokal
+    -- contoh: load dari file lokal, tapi di executor nggak bisa
+    -- jadi kita simpan di variabel global
+end
+
+local function saveWaypoints()
+    -- Kalau mau pakai DataStore, bisa di sini
+end
+
+-- Untuk keperluan executor, kita simpan di variabel global
+local waypoints = {} -- {nama = posisi CFrame}
+
+local function addWaypoint(name)
+    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        waypoints[name] = hrp.CFrame
+        if not table.find(waypointNames, name) then
+            table.insert(waypointNames, name)
+            createWaypointButton(name)
         end
     end
 end
 
-local function setWaypoint(name)
-    waypoints[name] = RootPart.Position
-    saveWaypoints()
-    updateWaypointList()
-end
-
-local function goToWaypoint(name)
+local function gotoWaypoint(name)
     if waypoints[name] then
-        local targetPosition = waypoints[name]
-        local tweenInfo = TweenInfo.new(
-            (RootPart.Position - targetPosition).Magnitude / Humanoid.WalkSpeed,
-            Enum.EasingStyle.Linear,
-            Enum.EasingDirection.Out,
-            0,
-            false,
-            0
-        )
-        local tween = TweenService:Create(RootPart, tweenInfo, {CFrame = CFrame.new(targetPosition)})
-        tween:Play()
-    else
-        warn("Waypoint '" .. name .. "' not found.")
+        -- langsung set posisi player
+        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.CFrame = waypoints[name]
+        end
     end
 end
 
 local function deleteWaypoint(name)
     waypoints[name] = nil
-    saveWaypoints()
-    updateWaypointList()
-end
-
--- // Waypoint GUI Elements
-local SetWaypointButton = Instance.new("TextButton")
-SetWaypointButton.Size = UDim2.new(0.9, 0, 0, 25)
-SetWaypointButton.Position = UDim2.new(0.05, 0, 0.1, 0)
-SetWaypointButton.Text = "Set Waypoint"
-SetWaypointButton.TextColor3 = Color3.new(1, 1, 1)
-SetWaypointButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-SetWaypointButton.BorderSizePixel = 0
-SetWaypointButton.Parent = WaypointFrame
-SetWaypointButton.MouseButton1Click:Connect(function()
-    local name = SetWaypointName.Text
-    if name ~= "" then
-        setWaypoint(name)
-        SetWaypointName.Text = ""
-    end
-end)
-
-local SetWaypointName = Instance.new("TextBox")
-SetWaypointName.Size = UDim2.new(0.9, 0, 0, 25)
-SetWaypointName.Position = UDim2.new(0.05, 0, 0.05, 0)
-SetWaypointName.PlaceholderText = "Waypoint Name"
-SetWaypointName.TextColor3 = Color3.new(1, 1, 1)
-SetWaypointName.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-SetWaypointName.BorderSizePixel = 0
-SetWaypointName.Parent = WaypointFrame
-
-local GoToWaypointButton = Instance.new("TextButton")
-GoToWaypointButton.Size = UDim2.new(0.44, 0, 0, 25)
-GoToWaypointButton.Position = UDim2.new(0.05, 0, 0.2, 0)
-GoToWaypointButton.Text = "Go To"
-GoToWaypointButton.TextColor3 = Color3.new(1, 1, 1)
-GoToWaypointButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-GoToWaypointButton.BorderSizePixel = 0
-GoToWaypointButton.Parent = WaypointFrame
-GoToWaypointButton.MouseButton1Click:Connect(function()
-    if selectedWaypoint then
-        goToWaypoint(selectedWaypoint)
-    end
-end)
-
-local DeleteWaypointButton = Instance.new("TextButton")
-DeleteWaypointButton.Size = UDim2.new(0.44, 0, 0, 25)
-DeleteWaypointButton.Position = UDim2.new(0.51, 0, 0.2, 0)
-DeleteWaypointButton.Text = "Delete"
-DeleteWaypointButton.TextColor3 = Color3.new(1, 1, 1)
-DeleteWaypointButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-DeleteWaypointButton.BorderSizePixel = 0
-DeleteWaypointButton.Parent = WaypointFrame
-DeleteWaypointButton.MouseButton1Click:Connect(function()
-    if selectedWaypoint then
-        deleteWaypoint(selectedWaypoint)
-        selectedWaypoint = nil
-    end
-end)
-
-local WaypointList = Instance.new("ScrollingFrame")
-WaypointList.Size = UDim2.new(0.9, 0, 0.5, 0)
-WaypointList.Position = UDim2.new(0.05, 0, 0.3, 0)
-WaypointList.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-WaypointList.BorderSizePixel = 0
-WaypointList.ScrollBarThickness = 5
-WaypointList.Parent = WaypointFrame
-
-local function updateWaypointList()
-    for _, obj in ipairs(WaypointList:GetChildren()) do
-        if obj:IsA("TextButton") then
-            obj:Destroy()
+    -- hapus dari GUI
+    for i, btn in pairs(waypointButtons) do
+        if btn.Text == name then
+            btn:Destroy()
+            table.remove(waypointButtons, i)
+            break
         end
     end
+end
 
-    local i = 0
-    for name, _ in pairs(waypoints) do
-        local WaypointButton = Instance.new("TextButton")
-        WaypointButton.Size = UDim2.new(1, 0, 0, 20)
-        WaypointButton.Position = UDim2.new(0, 0, i * 0.07, 0)
-        WaypointButton.Text = name
-        WaypointButton.TextColor3 = Color3.new(1, 1, 1)
-        WaypointButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-        WaypointButton.BorderSizePixel = 0
-        WaypointButton.Parent = WaypointList
-        WaypointButton.MouseButton1Click:Connect(function()
-            selectedWaypoint = name
-            for _, btn in ipairs(WaypointList:GetChildren()) do
-                if btn:IsA("TextButton") then
-                    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-                end
+-- GUI Control
+local inputBox = Instance.new("TextBox", frame)
+inputBox.Size = UDim2.new(1, -10, 0, 20)
+inputBox.Position = UDim2.new(0, 5, 1, -50)
+inputBox.PlaceholderText = "Waypoint name"
+
+local btnSet = Instance.new("TextButton", frame)
+btnSet.Size = UDim2.new(0.33, -10, 0, 20)
+btnSet.Position = UDim2.new(0, 5, 1, -25)
+btnSet.Text = "Set WP"
+
+local btnGoto = Instance.new("TextButton", frame)
+btnGoto.Size = UDim2.new(0.33, -10, 0, 20)
+btnGoto.Position = UDim2.new(0.33, 0, 1, -25)
+btnGoto.Text = "Goto WP"
+
+local btnDel = Instance.new("TextButton", frame)
+btnDel.Size = UDim2.new(0.33, -10, 0, 20)
+btnDel.Position = UDim2.new(0.66, 0, 1, -25)
+btnDel.Text = "Del WP"
+
+-- Button actions
+btnSet.MouseButton1Click:Connect(function()
+    local name = inputBox.Text
+    addWaypoint(name)
+end)
+
+btnGoto.MouseButton1Click:Connect(function()
+    local name = inputBox.Text
+    gotoWaypoint(name)
+end)
+
+btnDel.MouseButton1Click:Connect(function()
+    local name = inputBox.Text
+    deleteWaypoint(name)
+end)
+
+-- Minim, Close
+local minimized = false
+minimizeBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    contentFrame.Visible = not minimized
+    minimizeBtn.Text = minimized and "+" or "_"
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    gui:Destroy()
+end)
+
+-- Drag GUI
+local dragging = false
+local dragStart, startPos
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+    end
+end)
+frame.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        frame.Position = startPos + UDim2.new(0, delta.X, 0, delta.Y)
+    end
+end)
+frame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- Loop mengikuti waypoint otomatis
+local follow = false
+local targetCFrame
+local followConnection
+local function startFollow()
+    follow = true
+    followConnection = RunService.Heartbeat:Connect(function()
+        if targetCFrame then
+            local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CFrame = targetCFrame
             end
-            WaypointButton.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
-        end)
-        i = i + 1
-    end
+        end
+    end)
 end
 
--- // Loop Waypoint
-local LoopWaypointToggle = Instance.new("TextButton")
-LoopWaypointToggle.Size = UDim2.new(0.9, 0, 0, 25)
-LoopWaypointToggle.Position = UDim2.new(0.05, 0, 0.85, 0)
-LoopWaypointToggle.Text = "Loop Waypoint: Off"
-LoopWaypointToggle.TextColor3 = Color3.new(1, 1, 1)
-LoopWaypointToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-LoopWaypointToggle.BorderSizePixel = 0
-LoopWaypointToggle.Parent = WaypointFrame
-
-local function loopWaypoints()
-    if looping then
-        looping = false
-        LoopWaypointToggle.Text = "Loop Waypoint: Off"
-        return
+local function stopFollow()
+    if followConnection then
+        followConnection:Disconnect()
+        followConnection = nil
     end
+    follow = false
+end
 
-    looping = true
-    LoopWaypointToggle.Text = "Loop Waypoint: On"
-
-    local waypointNames = {}
-    for name, _ in pairs(waypoints) do
-        table.insert(waypointNames, name)
+local btnFollow = Instance.new("TextButton", frame)
+btnFollow.Size = UDim2.new(1, -10, 0, 20)
+btnFollow.Position = UDim2.new(0, 5, 1, -125)
+btnFollow.Text = "Follow Waypoint"
+btnFollow.MouseButton1Click:Connect(function()
+    if not follow then
+        local name = inputBox.Text
+        if waypoints[name] then
+            targetCFrame = waypoints[name]
+            startFollow()
+            btnFollow.Text = "Stop Following"
+        end
+    else
+        stopFollow()
+        btnFollow.Text = "Follow Waypoint"
     end
+end)
 
-    local currentIndex = 1
-    while looping do
-        local waypointName = waypointNames[currentIndex]
-        if waypointName then
-            goToWaypoint(waypointName)
-            wait(10) -- Minimal kecepatan 10 detik
-            currentIndex = (currentIndex % #waypointNames) + 1
-        else
-            looping = false
-            LoopWaypointToggle.Text = "Loop Waypoint: Off"
+-- Jika ingin otomatis mengikuti waypoint tertentu
+RunService.Heartbeat:Connect(function()
+    if follow and targetCFrame then
+        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.CFrame = targetCFrame
         end
     end
+end)
+
+-- Save dan load (bisa pakai file lokal, misalnya JSON)
+local function saveData()
+    local json = HttpService:JSONEncode(waypoints)
+    -- Simpan ke file lokal jika bisa, atau gunakan DataStore
+    -- Di executor, bisa simpan ke file lokal dengan writefile
+    -- Tapi di Roblox biasa nggak bisa, jadi ini contoh
+    -- writefile("waypoints.json", json)
 end
 
-LoopWaypointToggle.MouseButton1Click:Connect(loopWaypoints)
-
--- // Misc Tab
-local SpeedLabel = Instance.new("TextLabel")
-SpeedLabel.Size = UDim2.new(0.45, 0, 0, 20)
-SpeedLabel.Position = UDim2.new(0.05, 0, 0.05, 0)
-SpeedLabel.Text = "Speed (1-100):"
-SpeedLabel.TextColor3 = Color3.new(1, 1, 1)
-SpeedLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-SpeedLabel.BorderSizePixel = 0
-SpeedLabel.Parent = MiscFrame
-
-local SpeedTextBox = Instance.new("TextBox")
-SpeedTextBox.Size = UDim2.new(0.45, 0, 0, 20)
-SpeedTextBox.Position = UDim2.new(0.5, 0, 0.05, 0)
-SpeedTextBox.Text = "16"
-SpeedTextBox.TextColor3 = Color3.new(1, 1, 1)
-SpeedTextBox.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-SpeedTextBox.BorderSizePixel = 0
-SpeedTextBox.Parent = MiscFrame
-SpeedTextBox.FocusLost:Connect(function()
-    local speed = tonumber(SpeedTextBox.Text)
-    if speed and speed >= 1 and speed <= 100 then
-        Humanoid.WalkSpeed = speed
-    else
-        SpeedTextBox.Text = tostring(Humanoid.WalkSpeed)
-    end
-end)
-
-local JumpPowerLabel = Instance.new("TextLabel")
-JumpPowerLabel.Size = UDim2.new(0.45, 0, 0, 20)
-JumpPowerLabel.Position = UDim2.new(0.05, 0, 0.15, 0)
-JumpPowerLabel.Text = "Jump Power (1-150):"
-JumpPowerLabel.TextColor3 = Color3.new(1, 1, 1)
-JumpPowerLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-JumpPowerLabel.BorderSizePixel = 0
-JumpPowerLabel.Parent = MiscFrame
-
-local JumpPowerTextBox = Instance.new("TextBox")
-JumpPowerTextBox.Size = UDim2.new(0.45, 0, 0, 20)
-JumpPowerTextBox.Position = UDim2.new(0.5, 0, 0.15, 0)
-JumpPowerTextBox.Text = "50"
-JumpPowerTextBox.TextColor3 = Color3.new(1, 1, 1)
-JumpPowerTextBox.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-JumpPowerTextBox.BorderSizePixel = 0
-JumpPowerTextBox.Parent = MiscFrame
-JumpPowerTextBox.FocusLost:Connect(function()
-    local jumpPower = tonumber(JumpPowerTextBox.Text)
-    if jumpPower and jumpPower >= 1 and jumpPower <= 150 then
-        Humanoid.JumpPower = jumpPower
-    else
-        JumpPowerTextBox.Text = tostring(Humanoid.JumpPower)
-    end
-end)
-
--- // Infinite Jump
-local InfiniteJumpToggle = Instance.new("TextButton")
-InfiniteJumpToggle.Size = UDim2.new(0.9, 0, 0, 25)
-InfiniteJumpToggle.Position = UDim2.new(0.05, 0, 0.25, 0)
-InfiniteJumpToggle.Text = "Infinite Jump: Off"
-InfiniteJumpToggle.TextColor3 = Color3.new(1, 1, 1)
-InfiniteJumpToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-InfiniteJumpToggle.BorderSizePixel = 0
-InfiniteJumpToggle.Parent = MiscFrame
-
-local infiniteJumpEnabled = false
-local function toggleInfiniteJump()
-    infiniteJumpEnabled = not infiniteJumpEnabled
-    if infiniteJumpEnabled then
-        InfiniteJumpToggle.Text = "Infinite Jump: On"
-    else
-        InfiniteJumpToggle.Text = "Infinite Jump: Off"
-    end
+local function loadData()
+    -- local json = readfile("waypoints.json")
+    -- if json then
+    --     waypoints = HttpService:JSONDecode(json)
+    --     for name, cframe in pairs(waypoints) do
+    --         createWaypointButton(name)
+    --     end
+    -- end
 end
 
-InfiniteJumpToggle.MouseButton1Click:Connect(toggleInfiniteJump)
-
-Humanoid.Died:Connect(function()
-    infiniteJumpEnabled = false
-    InfiniteJumpToggle.Text = "Infinite Jump: Off"
+-- Sebelum keluar, save data
+game:BindToClose(function()
+    saveData()
 end)
 
-UserInputService.JumpRequest:Connect(function()
-    if infiniteJumpEnabled then
-        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end)
-
--- // Anti AFK
-local AntiAFKToggle = Instance.new("TextButton")
-AntiAFKToggle.Size = UDim2.new(0.9, 0, 0, 25)
-AntiAFKToggle.Position = UDim2.new(0.05, 0, 0.35, 0)
-AntiAFKToggle.Text = "Anti AFK: Off"
-AntiAFKToggle.TextColor3 = Color3.new(1, 1, 1)
-AntiAFKToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-AntiAFKToggle.BorderSizePixel = 0
-AntiAFKToggle.Parent = MiscFrame
-
-local antiAFKEnabled = false
-local antiAFKConnection = nil
-
-local function toggleAntiAFK()
-    antiAFKEnabled = not antiAFKEnabled
-    if antiAFKEnabled then
-        AntiAFKToggle.Text = "Anti AFK: On"
-        antiAFKConnection = game:GetService("RunService").Heartbeat:Connect(function()
-            Humanoid:MoveTo(RootPart.Position + Vector3.new(0, 0.1, 0))
-        end)
-    else
-        AntiAFKToggle.Text = "Anti AFK: Off"
-        if antiAFKConnection then
-            antiAFKConnection:Disconnect()
-            antiAFKConnection = nil
-        end
-    end
-end
-
-AntiAFKToggle.MouseButton1Click:Connect(toggleAntiAFK)
-
--- // Fly
-local FlyToggle = Instance.new("TextButton")
-FlyToggle.Size = UDim2.new(0.9, 0, 0, 25)
-FlyToggle.Position = UDim2.new(0.05, 0, 0.45, 0)
-FlyToggle.Text = "Fly: Off"
-FlyToggle.TextColor3 = Color3.new(1, 1, 1)
-FlyToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-FlyToggle.BorderSizePixel = 0
-FlyToggle.Parent = MiscFrame
-
-local flying = false
-local flySpeed = 25
-local canCollideOriginal = true
+-- Fitur Fly dan Noclip
+local flyActive = false
+local noclipActive = false
+local flySpeed = 50
+local flyDirection = Vector3.new(0,0,0)
 
 local function toggleFly()
-    flying = not flying
-    if flying then
-        FlyToggle.Text = "Fly: On"
-        canCollideOriginal = RootPart.CanCollide
-        RootPart.CanCollide = false
-        Humanoid.PlatformStand = true
-    else
-        FlyToggle.Text = "Fly: Off"
-        RootPart.CanCollide = canCollideOriginal
-        Humanoid.PlatformStand = false
+    flyActive = not flyActive
+    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.Anchored = false
     end
 end
-
-FlyToggle.MouseButton1Click:Connect(toggleFly)
-
-game:GetService("RunService").Heartbeat:Connect(function()
-    if flying then
-        RootPart.Velocity = Vector3.new(0, 0, 0)
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            RootPart.CFrame = RootPart.CFrame * CFrame.new(0, 0, -flySpeed * 0.01)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            RootPart.CFrame = RootPart.CFrame * CFrame.new(0, 0, flySpeed * 0.01)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            RootPart.CFrame = RootPart.CFrame * CFrame.new(-flySpeed * 0.01, 0, 0)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            RootPart.CFrame = RootPart.CFrame * CFrame.new(flySpeed * 0.01, 0, 0)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            RootPart.CFrame = RootPart.CFrame * CFrame.new(0, flySpeed * 0.01, 0)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-            RootPart.CFrame = RootPart.CFrame * CFrame.new(0, -flySpeed * 0.01, 0)
-        end
-    end
-end)
-
--- // Noclip
-local NoclipToggle = Instance.new("TextButton")
-NoclipToggle.Size = UDim2.new(0.9, 0, 0, 25)
-NoclipToggle.Position = UDim2.new(0.05, 0, 0.55, 0)
-NoclipToggle.Text = "Noclip: Off"
-NoclipToggle.TextColor3 = Color3.new(1, 1, 1)
-NoclipToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-NoclipToggle.BorderSizePixel = 0
-NoclipToggle.Parent = MiscFrame
-
-local noclipEnabled = false
 
 local function toggleNoclip()
-    noclipEnabled = not noclipEnabled
-    if noclipEnabled then
-        NoclipToggle.Text = "Noclip: On"
-        Character.CollisionGroup = "NoCollision"
-    else
-        NoclipToggle.Text = "Noclip: Off"
-        Character.CollisionGroup = "Default"
+    noclipActive = not noclipActive
+    for _, part in pairs(player.Character:GetChildren()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = not noclipActive
+        end
     end
 end
 
-NoclipToggle.MouseButton1Click:Connect(toggleNoclip)
+local function setFlySpeed(val)
+    flySpeed = tonumber(val) or 50
+end
 
--- // Collision Groups Setup
-local PhysicsService = game:GetService("PhysicsService")
-PhysicsService:CreateCollisionGroup("NoCollision")
-PhysicsService:CollisionGroupSetCollidable("NoCollision", "Default", false)
-PhysicsService:CollisionGroupSetCollidable("NoCollision", "NoCollision", false)
+local function setJumpPower(val)
+    local hr = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    if hr then
+        hr.JumpPower = tonumber(val) or 50
+    end
+end
 
-Character:SetAttribute("CollisionGroup", "Default")
-
-Character.Changed:Connect(function(property)
-    if property == "Parent" then
-        Character = LocalPlayer.Character
-        Humanoid = Character:WaitForChild("Humanoid")
-        RootPart = Character:WaitForChild("HumanoidRootPart")
-        Character:SetAttribute("CollisionGroup", "Default")
+-- Keyboard controls (WASD, Space, Ctrl)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.W then
+        flyDirection = flyDirection + Vector3.new(0,0,-1)
+    elseif input.KeyCode == Enum.KeyCode.S then
+        flyDirection = flyDirection + Vector3.new(0,0,1)
+    elseif input.KeyCode == Enum.KeyCode.A then
+        flyDirection = flyDirection + Vector3.new(-1,0,0)
+    elseif input.KeyCode == Enum.KeyCode.D then
+        flyDirection = flyDirection + Vector3.new(1,0,0)
+    elseif input.KeyCode == Enum.KeyCode.Space then
+        flyDirection = flyDirection + Vector3.new(0,1,0)
+    elseif input.KeyCode == Enum.KeyCode.LeftControl then
+        flyDirection = flyDirection + Vector3.new(0,-1,0)
     end
 end)
 
--- // Load Waypoints on Start
-loadWaypoints()
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.W then
+        flyDirection = flyDirection - Vector3.new(0,0,-1)
+    elseif input.KeyCode == Enum.KeyCode.S then
+        flyDirection = flyDirection - Vector3.new(0,0,1)
+    elseif input.KeyCode == Enum.KeyCode.A then
+        flyDirection = flyDirection - Vector3.new(-1,0,0)
+    elseif input.KeyCode == Enum.KeyCode.D then
+        flyDirection = flyDirection - Vector3.new(1,0,0)
+    elseif input.KeyCode == Enum.KeyCode.Space then
+        flyDirection = flyDirection - Vector3.new(0,1,0)
+    elseif input.KeyCode == Enum.KeyCode.LeftControl then
+        flyDirection = flyDirection - Vector3.new(0,-1,0)
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    -- Fly control
+    if flyActive then
+        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.CFrame = hrp.CFrame * CFrame.new(flyDirection * (flySpeed/60))
+        end
+    end
+    -- Noclip
+    if noclipActive then
+        for _, part in pairs(player.Character:GetChildren()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- Anti AFK
+local VirtualUser = game:GetService("VirtualUser")
+game:GetService("Players").LocalPlayer.Idled:Connect(function()
+    VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    wait(1)
+    VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+end)
+
+-- Toggle fly dan noclip dari GUI
+local btnFly = Instance.new("TextButton", frame)
+btnFly.Size = UDim2.new(0.5, -10, 0, 20)
+btnFly.Position = UDim2.new(0, 5, 1, -150)
+btnFly.Text = "Fly: OFF"
+btnFly.MouseButton1Click: function()
+    toggleFly()
+    btnFly.Text = "Fly: " .. (flyActive and "ON" or "OFF")
+end
+
+local btnNoclip = Instance.new("TextButton", frame)
+btnNoclip.Size = UDim2.new(0.5, -10, 0, 20)
+btnNoclip.Position = UDim2.new(0.5, 0, 1, -150)
+btnNoclip.Text = "Noclip: OFF"
+btnNoclip.MouseButton1Click: function()
+    toggleNoclip()
+    btnNoclip.Text = "Noclip: " .. (noclipActive and "ON" or "OFF")
+end)
+
+local speedBox = Instance.new("TextBox", frame)
+speedBox.Size = UDim2.new(0.5, -10, 0, 20)
+speedBox.Position = UDim2.new(0, 5, 1, -180)
+speedBox.PlaceholderText = "Speed (10-100)"
+speedBox.Text = "50"
+speedBox.FocusLost:Connect(function()
+    setFlySpeed(speedBox.Text)
+end)
+
+local jumpBox = Instance.new("TextBox", frame)
+jumpBox.Size = UDim2.new(0.5, -10, 0, 20)
+jumpBox.Position = UDim2.new(0.5, 0, 1, -180)
+jumpBox.PlaceholderText = "Jump Power (1-150)"
+jumpBox.Text = "50"
+jumpBox.FocusLost:Connect(function()
+    setJumpPower(jumpBox.Text)
+end)
+
+-- Tombol follow waypoint
+local btnFollow = Instance.new("TextButton", frame)
+btnFollow.Size = UDim2.new(1, -10, 0, 20)
+btnFollow.Position = UDim2.new(0, 5, 1, -210)
+btnFollow.Text = "Follow Waypoint"
+local following = false
+local followTargetCFrame = nil
+local followConn
+btnFollow.MouseButton1Click:Connect(function()
+    if not following then
+        local name = inputBox.Text
+        if waypoints[name] then
+            followTargetCFrame = waypoints[name]
+            following = true
+            if followConn then followConn:Disconnect() end
+            followConn = RunService.Heartbeat:Connect(function()
+                local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    hrp.CFrame = followTargetCFrame
+                end
+            end)
+            btnFollow.Text = "Stop Follow"
+        end
+    else
+        if followConn then followConn:Disconnect() end
+        following = false
+        btnFollow.Text = "Follow Waypoint"
+    end
+end)
+
+-- Simpan data saat keluar
+game:BindToClose(function()
+    -- Save waypoints ke DataStore jika perlu
+end)
